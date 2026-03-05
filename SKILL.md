@@ -47,6 +47,7 @@ It operates in **three modes**: contextual RAG analysis, multi-turn Deep Researc
 | Parameter | Type | Description |
 |---|---|---|
 | `response` | string | Structured Markdown response with technical analysis, iterative research, or final conclusion depending on the active mode |
+| `html_file` | string | (Optional) Path to the generated HTML file when HTML output is requested. The HTML follows the DeepWiki dark-theme interface layout |
 
 ---
 
@@ -362,6 +363,7 @@ TXBrowse is a powerful data grid control that supports...
    - **ALL Mermaid diagrams MUST use `[quote][mermaid]...[/mermaid][/quote]` syntax** (never use ` ```mermaid ` fences)
    - Generate as many Mermaid diagrams as possible to visually illustrate the analysis
    - Tables for metrics and comparisons
+   - **HTML output**: When requested, convert the Markdown to a standalone HTML file using `deepwiki-template.html` (see **HTML Output Generation** section below)
 
 ---
 
@@ -521,6 +523,133 @@ The following pages MUST be generated for any project analysis. Adapt titles and
 - Use tables for structured comparisons (compiler matrix, component lists, etc.)
 - Every page should have a **"Relevant source files"** blockquote at the top
 - Keep an academic/encyclopedic tone — informative, neutral, precise
+
+---
+
+## HTML Output Generation
+
+The skill can generate a **standalone HTML file** that replicates the DeepWiki dark-theme interface. This is the preferred output format when the user requests a visual, browsable wiki.
+
+### Files Involved
+
+| File | Purpose |
+|---|---|
+| `deepwiki-template.html` | Self-contained HTML template with dark theme, 3-column layout (sidebar, content, TOC), Mermaid.js rendering, highlight.js syntax highlighting, search, and responsive design |
+| `md2html.js` | Node.js script that converts the skill's Markdown output into a standalone HTML file using the template |
+
+### When to Generate HTML
+
+- When the user explicitly asks for HTML output
+- When the user mentions "like DeepWiki" or "visual wiki"
+- When doing a full repository analysis (the default output should include HTML)
+- When the user asks to "see" or "browse" the documentation
+
+### Method 1: Using the Conversion Script
+
+After generating the Markdown analysis, run:
+
+```bash
+node md2html.js analysis.md output.html --repo-owner=OwnerName --repo-name=RepoName
+```
+
+The script will:
+1. Extract the `## 📑 Navigation` block to build the sidebar
+2. Convert `[quote][mermaid]...[/mermaid][/quote]` to `<div class="mermaid">` for rendering
+3. Split content at `---` dividers into separate wiki pages
+4. Generate TOC from `h2`/`h3` headings for the right sidebar
+5. Inject everything into the template and produce a single, self-contained HTML file
+
+### Method 2: Direct HTML Generation (Preferred)
+
+The agent can also generate the HTML directly by:
+
+1. Reading `deepwiki-template.html` as a reference for the structure and CSS
+2. Replacing the `{{PLACEHOLDERS}}` with generated content:
+   - `{{REPO_OWNER}}` — Repository owner/organization name
+   - `{{REPO_NAME}}` — Repository name
+   - `{{NAV_ITEMS}}` — HTML for the sidebar navigation tree
+   - `{{PAGE_CONTENT}}` — HTML for all wiki pages wrapped in `<div class="wiki-page">` elements
+   - `{{TOC_ITEMS}}` — HTML for the right-side "On this page" links
+3. Writing the complete HTML file to the output location
+
+### Template Placeholder Details
+
+#### `{{NAV_ITEMS}}` — Sidebar Navigation
+
+Each navigation item uses this structure:
+
+```html
+<div class="nav-section">
+    <a class="nav-item" data-page="page-overview" onclick="navigateTo('page-overview')">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor">...</svg>
+        Overview
+    </a>
+</div>
+```
+
+For nested items, increase `padding-left` in increments of 20px (36px, 56px, etc.).
+
+#### `{{PAGE_CONTENT}}` — Wiki Pages
+
+Each page is wrapped in a div. The first page should have the `active` class:
+
+```html
+<div class="wiki-page active" id="page-overview">
+    <h1>Overview</h1>
+    <div class="source-files-box" onclick="toggleSourceFiles(this)">
+        <span class="icon">📄</span> Relevant source files
+        <span class="chevron">›</span>
+    </div>
+    <div class="source-files-list">
+        <a class="source-file-item" href="#">include/fivewin.ch#L8-9</a>
+    </div>
+    <p>Page content here...</p>
+    <div class="mermaid">
+        graph TD
+            A["Layer 1"] --> B["Layer 2"]
+    </div>
+</div>
+<div class="wiki-page" id="page-getting-started">
+    ...
+</div>
+```
+
+#### `{{TOC_ITEMS}}` — Table of Contents
+
+```html
+<a class="toc-link" href="#section-id">Section Title</a>
+<a class="toc-link depth-3" href="#subsection-id">Subsection Title</a>
+```
+
+### CSS Classes Reference
+
+| Class | Usage |
+|---|---|
+| `.wiki-page` | Wrapper for each page section, use `.active` to show |
+| `.source-files-box` | Collapsible "Relevant source files" header |
+| `.source-files-list` | Container for source file links |
+| `.source-file-item` | Individual source file link |
+| `.mermaid` | Mermaid diagram container (auto-rendered by Mermaid.js) |
+| `.nav-item` | Sidebar navigation item, use `.active` for current page |
+| `.nav-children` | Collapsible child nav container, use `.open` to expand |
+| `.toc-link` | Right sidebar TOC link, use `.depth-3` for h3 indentation |
+| `.code-block-wrapper` | Auto-generated wrapper for code blocks with copy button |
+
+### Design Specifications
+
+The template faithfully replicates the DeepWiki interface:
+
+| Element | Specification |
+|---|---|
+| Background | `#0d1117` (base), `#161b22` (surface), `#1c2129` (overlay) |
+| Text | `#e6edf3` (primary), `#8b949e` (secondary), `#6e7681` (tertiary) |
+| Accent | `#1f6feb` (blue), `#3fb950` (green), `#58a6ff` (links) |
+| Font | Inter (sans), JetBrains Mono (code) — loaded from Google Fonts CDN |
+| Sidebar width | 280px (left), 220px (right TOC) |
+| Content max-width | 820px |
+| Header height | 48px |
+| Mermaid theme | Dark mode with matching color variables |
+| Responsive | TOC hidden at 1200px, sidebar collapses at 768px |
 
 ---
 
